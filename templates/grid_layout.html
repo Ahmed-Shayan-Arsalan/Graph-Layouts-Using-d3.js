@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Graph Visualization with D3.js - Custom Dataset</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    .node {
+      fill: #1f78b4;
+      stroke: #fff;
+      stroke-width: 2px;
+    }
+
+    .link {
+      stroke: #ccc;
+      fill: none;
+      transition: stroke-width 0.3s; /* Add smooth transition */
+    }
+
+    .link.active {
+      stroke: #f00; /* Change the color to red on hover */
+      stroke-width: 5px; /* Increase the stroke width on hover */
+    }
+
+    .link.clicked {
+      stroke: #f00; /* Change the color to red on click */
+      stroke-width: 5px; /* Increase the stroke width on click */
+    }
+
+    .node.active {
+      fill: #f00; /* Change the color to red when connected to hovered link */
+    }
+
+    .node-label {
+      font-size: 12px;
+      text-anchor: middle;
+    }
+  </style>
+</head>
+<body>
+
+<script>
+  // Provided data
+  // const data = {'nodes': [{'id': 'A'}, {'id': 'B'}, {'id': 'C'}, {'id': 'D'}, {'id': 'E'}, {'id': 'F'}, {'id': 'G'}, {'id': 'H'}, {'id': 'I'}, {'id': 'J'}], 'links': [{'source': 'A', 'target': 'B'}, {'source': 'B', 'target': 'A'}, {'source': 'B', 'target': 'C'}, {'source': 'C', 'target': 'B'}, {'source': 'C', 'target': 'D'}, {'source': 'D', 'target': 'C'}, {'source': 'D', 'target': 'E'}, {'source': 'E', 'target': 'D'}, {'source': 'E', 'target': 'F'}, {'source': 'F', 'target': 'E'}, {'source': 'F', 'target': 'G'}, {'source': 'G', 'target': 'F'}, {'source': 'G', 'target': 'H'}, {'source': 'H', 'target': 'G'}, {'source': 'H', 'target': 'I'}, {'source': 'I', 'target': 'H'}, {'source': 'I', 'target': 'J'}, {'source': 'J', 'target': 'A'}, {'source': 'J', 'target': 'I'}]};
+  var data=JSON.parse('{{ graph_data|safe }}');
+  // Create SVG container
+  const svg = d3.select("body").append("svg")
+    .attr("width", 1000)
+    .attr("height", 800);
+
+  // Use provided nodes
+  const nodes = data.nodes.map(node => ({ id: node.id, name: node.id }));
+
+  // Use provided links
+  const links = data.links.map(link => ({ source: nodes.findIndex(node => node.id === link.source), target: nodes.findIndex(node => node.id === link.target) }));
+
+  // Calculate dynamic grid layout
+  const totalNodes = nodes.length;
+  const gridSize = Math.ceil(Math.sqrt(totalNodes));
+  const numCols = Math.ceil(totalNodes / gridSize); // Calculate the number of columns dynamically
+  const spacing = 100; // Adjust the spacing here
+
+  nodes.forEach((node, index) => {
+    const col = index % numCols;
+    const row = Math.floor(index / numCols);
+    node.x = spacing + col * spacing * 1.5;
+    node.y = spacing + row * spacing * 1.5;
+  });
+
+  // Create nodes
+  const nodeSelection = svg.selectAll(".node")
+    .data(nodes)
+    .enter().append("circle")
+    .attr("class", "node")
+    .attr("cx", d => d.x)
+    .attr("cy", d => d.y)
+    .attr("r", 20);
+
+  // Create links
+  const linkSelection = svg.selectAll(".link")
+    .data(links)
+    .enter().append("path")
+    .attr("class", "link")
+    .attr("d", d => {
+      const dx = nodes[d.target].x - nodes[d.source].x;
+      const dy = nodes[d.target].y - nodes[d.source].y;
+      const dr = Math.sqrt(dx * dx + dy * dy);
+
+      // Check if nodes are adjacent or diagonally adjacent
+      if (Math.abs(d.target - d.source) === 1 || Math.abs(d.target - d.source) === numCols) {
+        return `M ${nodes[d.source].x},${nodes[d.source].y} L ${nodes[d.target].x},${nodes[d.target].y}`;
+      } else {
+        return `M ${nodes[d.source].x},${nodes[d.source].y} A ${dr},${dr} 0 0,1 ${nodes[d.target].x},${nodes[d.target].y}`;
+      }
+    })
+    .on("click", function() {
+      d3.select(this).classed("clicked", !d3.select(this).classed("clicked"));
+    });
+
+  // Add labels to nodes
+  svg.selectAll(".node-label")
+    .data(nodes)
+    .enter().append("text")
+    .attr("class", "node-label")
+    .text(d => d.name)
+    .attr("x", d => d.x)
+    .attr("y", d => d.y)
+    .attr("dy", 5)
+    .attr("text-anchor", "middle");
+
+  // Add hover effect to links and change the color of connected nodes
+  linkSelection
+    .on("mouseover", function(d) {
+      d3.select(this).classed("active", true);
+      nodeSelection
+        .filter((node, i) => i === d.source || i === d.target)
+        .classed("active", true);
+    })
+    .on("mouseout", function() {
+      if (!d3.select(this).classed("clicked")) {
+        d3.select(this).classed("active", false);
+        nodeSelection.classed("active", false);
+      }
+    });
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rheingold-Tilford Tree Layout</title>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <style>
+    /* Add any custom styles here */
+    .link {
+      fill: none;
+      stroke: #ccc;
+      stroke-width: 1.5px;
+    }
+
+    .node circle {
+      fill: #fff;
+      stroke: steelblue;
+      stroke-width: 1.5px;
+    }
+
+    .node text {
+      font-size: 12px;
+    }
+
+    button {
+      margin: 10px;
+      padding: 8px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <button id="resetButton">Reset</button>
+
+  <script>
+    // JSON data
+    const jsonData = JSON.parse('{{ graph_data|safe }}');
+
+    // Function to convert JSON data to a tree structure
+    function jsonToTree(jsonData) {
+      const treeData = {
+        name: 'Root',
+        children: jsonData.nodes.map(node => ({
+          name: node.id,
+          selected: false, // Add a property to track the selection state
+          children: []
+        }))
+      };
+
+      treeData.children.forEach(node => {
+        const linkedNodes = jsonData.links.filter(link => link.source === node.name);
+        node.children = linkedNodes.map(link => ({
+          name: link.target
+        }));
+      });
+
+      return treeData;
+    }
+
+    // Function to set up the tree layout
+    function setupTreeLayout(size) {
+      return d3.tree().size([size * 100, size * 80]);
+    }
+
+    // Create an SVG container
+    const svg = d3.select('body').append('svg')
+      .attr('width', 1000)
+      .attr('height', 800)
+      .append('g')
+      .attr('transform', 'translate(50, 50)');
+
+    // Convert the JSON data to a tree structure
+    const treeData = jsonToTree(jsonData);
+
+    // Set up the tree layout
+    const datasetSize = jsonData.nodes.length;
+    const treeLayout = setupTreeLayout(datasetSize);
+
+    // Create a hierarchical structure from the tree data
+    const root = d3.hierarchy(treeData);
+
+    // Assign positions to each node in the hierarchy
+    const treeNodes = treeLayout(root);
+
+    // Draw links between nodes
+    const links = svg.selectAll('.link')
+      .data(treeNodes.links())
+      .enter().append('path')
+      .attr('class', 'link')
+      .attr('d', d3.linkVertical()
+        .x(d => d.x)
+        .y(d => d.y));
+
+    // Draw nodes
+    const nodes = svg.selectAll('.node')
+      .data(treeNodes.descendants())
+      .enter().append('g')
+      .attr('class', 'node')
+      .attr('transform', d => `translate(${d.x},${d.y})`)
+      .on('click', clicked); // Add click event listener
+
+    nodes.append('circle')
+      .attr('r', 5);
+
+    nodes.append('text')
+      .attr('dy', 3)
+      .attr('x', d => d.children ? -8 : 8)
+      .style('text-anchor', d => d.children ? 'end' : 'start')
+      .text(d => d.data.name);
+
+    // Add fading effect
+    links.style("opacity", 0)
+      .transition()
+      .delay((d, i) => i * 200) // Adjust the delay as needed
+      .duration(2500) // Adjust the duration to make it 4 times slower
+      .style("opacity", 1);
+
+    // Event handler for node click
+    function clicked(d) {
+      // Toggle the selected state of the clicked node
+      d.data.selected = !d.data.selected;
+
+      // Reset the opacity of all nodes and links
+      nodes.transition().style('opacity', 1);
+      links.transition().style('opacity', 1);
+
+      // If the clicked node is selected, reduce the opacity of non-selected nodes and links
+      if (d.data.selected) {
+        nodes.filter(node => node.data.selected !== true)
+          .transition()
+          .style('opacity', 0.2);
+        links.filter(link => !link.source.data.selected || !link.target.data.selected)
+          .transition()
+          .style('opacity', 0.2);
+      }
+    }
+
+    // Reset button event handler
+    document.getElementById('resetButton').addEventListener('click', function () {
+      // Reset the selected state of all nodes
+      nodes.each(d => d.data.selected = false);
+
+      // Reset the opacity of all nodes and links
+      nodes.transition().style('opacity', 1);
+      links.transition().style('opacity', 1);
+    });
+  </script>
+
+</body>
+
+</html>

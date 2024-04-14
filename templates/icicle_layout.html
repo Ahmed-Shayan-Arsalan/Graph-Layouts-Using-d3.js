@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Icicle Layout</title>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <style>
+    /* Add any custom styles here */
+    .node rect {
+      stroke: #fff;
+      stroke-width: 2px;
+      fill-opacity: 0.7; /* Add fill-opacity to make nodes semi-transparent */
+    }
+
+    .root {
+      fill: #3182bd; /* Blue for the root node */
+    }
+
+    .parent {
+      fill: #9ecae1; /* Default color for parent nodes */
+    }
+
+    .node text {
+      font-size: 14px;
+      fill: #000; /* Change text color to black for better visibility */
+    }
+
+    .link {
+      fill: none;
+      stroke: #9ecae1;
+      stroke-width: 2px;
+    }
+
+    .tooltip {
+      position: absolute;
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      padding: 5px;
+      font-size: 12px;
+      pointer-events: none;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<script>
+  // JSON data
+  const jsonData = JSON.parse('{{ graph_data|safe }}');
+
+  // Function to convert JSON data to an icicle layout
+  function jsonToIcicle(jsonData) {
+    const icicleData = {
+      name: 'Root',
+      children: jsonData.nodes.map(node => ({
+        name: node.id,
+        children: []
+      }))
+    };
+
+    icicleData.children.forEach(node => {
+      const linkedNodes = jsonData.links.filter(link => link.source === node.name);
+      node.children = linkedNodes.map(link => ({
+        name: link.target
+      }));
+    });
+
+    return d3.hierarchy(icicleData)
+      .sum(d => 1) // Set a constant value for each node
+      .sort((a, b) => b.height - a.height || b.value - a.value);
+  }
+
+  // Create icicle layout
+  const width = 800;
+  const height = 400;
+
+  const root = jsonToIcicle(jsonData);
+
+  const partition = d3.partition()
+    .size([width, height]);
+
+  partition(root);
+
+  const uniqueParentColors = {}; // Object to store unique parent colors
+
+  const svg = d3.select('body').append('svg')
+    .attr('width', width)
+    .attr('height', height);
+
+  const tooltip = d3.select('body').append('div')
+    .attr('class', 'tooltip');
+
+  const cell = svg.selectAll('g')
+    .data(root.descendants())
+    .enter().append('g')
+    .attr('transform', d => `translate(${d.x0},${d.y0})`)
+    .attr('class', d => {
+      if (d.depth === 0) return 'root';
+      if (d.depth === 1) {
+        const parentId = d.data.name;
+        if (!uniqueParentColors[parentId]) {
+          // Assign a unique color to each parent
+          uniqueParentColors[parentId] = getRandomColor();
+        }
+        return `parent parent-${parentId}`;
+      }
+      return 'node';
+    })
+    .on('mouseover', handleMouseOver)
+    .on('mouseout', handleMouseOut);
+
+  cell.append('rect')
+    .attr('width', d => d.x1 - d.x0)
+    .attr('height', d => d.y1 - d.y0)
+    .style('fill', d => {
+      if (d.depth === 1) {
+        const parentId = d.data.name;
+        return uniqueParentColors[parentId];
+      }
+      return null;
+    });
+
+  cell.append('text')
+    .attr('x', 3)
+    .attr('y', 13)
+    .text(d => d.data.name);
+
+  // Add links
+  const links = svg.selectAll('.link')
+    .data(root.links())
+    .enter().append('path')
+    .attr('class', 'link')
+    .attr('d', d => `M${d.source.x1},${d.source.y1}V${d.target.y0}H${d.target.x0}V${d.target.y1}`);
+
+  // Function to generate a random color
+  function getRandomColor() {
+    return '#' + Math.floor(Math.random()*16777215).toString(16);
+  }
+
+  // Tooltip handling functions
+  function handleMouseOver(d) {
+    tooltip.html(`Node: ${d.data.name}<br>Children: ${d.children ? d.children.length : 0}`)
+      .style('left', (d3.event.pageX + 10) + 'px')
+      .style('top', (d3.event.pageY - 20) + 'px')
+      .style('display', 'block');
+  }
+
+  function handleMouseOut() {
+    tooltip.style('display', 'none');
+  }
+
+</script>
+
+</body>
+</html>

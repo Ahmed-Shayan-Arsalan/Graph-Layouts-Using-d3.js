@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Diagrams</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        video {
+            width: 100%;
+            height: 100vh;
+            object-fit: cover;
+        }
+
+        h1, form {
+            position: absolute;
+            top: 10%;
+            right: 10%;
+            z-index: 1;
+            color: #00e5ff; /* Light Cyan color */
+            font-size: 4em;
+        }
+
+        form {
+            text-align: right;
+        }
+
+        button {
+            margin-top: 150px;
+            margin-left: 200px;
+            color: white;
+            border: none;
+            padding: 5px 10px; /* Smaller padding for a smaller size */
+            font-size: 0.25em; /* Smaller font size */
+            cursor: pointer;
+            transition: background-color 0.5s ease;
+            animation: colorAnimation 4s infinite alternate; /* Alternate between cyan and dark blue */
+        }
+
+        button:hover {
+            animation: none; /* Stop the animation on hover */
+            background-color: #87ceeb; /* Darker light blue color on hover */
+        }
+
+        @keyframes colorAnimation {
+            0% {
+                background-color: #00e5ff; /* Light Cyan color */
+            }
+            100% {
+                background-color: #00008b; /* Dark Blue color */
+            }
+        }
+
+        #graph-text span {
+            display: inline-block;
+            opacity: 0;
+            animation: fadeInLetterDelayed 1.5s forwards;
+        }
+
+        @keyframes fadeInLetterDelayed {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        #graph-text span {
+            animation-delay: 3s;
+        }
+    </style>
+</head>
+<body>
+    <video autoplay muted loop>
+        <source src="{{ url_for('static', filename='fortree.mp4') }}" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <h1>
+        <span id="graph-text">Generate Diagrams</span>
+    </h1>
+
+    <form method="POST" action="/general_graph_select">
+        <button type="submit" name="diagram_type" value="grid">Generate Grid Diagram</button>
+        <button type="submit" name="diagram_type" value="chord">Generate Chord Diagram</button>
+    </form>
+
+    <script>
+        var titleText = document.getElementById('graph-text').textContent;
+        var titleContainer = document.getElementById('graph-text');
+        titleContainer.innerHTML = '';
+
+        for (var i = 0; i < titleText.length; i++) {
+            var letterSpan = document.createElement('span');
+            letterSpan.textContent = titleText[i];
+            if (titleText[i] === ' ') {
+                titleContainer.appendChild(document.createTextNode('\u00A0'));
+            } else {
+                letterSpan.style.opacity = 0;
+                letterSpan.style.animation = 'fadeInLetterDelayed 1.5s forwards ' + (i * 0.1) + 's';
+                titleContainer.appendChild(letterSpan);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Graph Visualization with D3.js - Custom Dataset</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    .node {
+      fill: #1f78b4;
+      stroke: #fff;
+      stroke-width: 2px;
+    }
+
+    .link {
+      stroke: #ccc;
+      fill: none;
+      transition: stroke-width 0.3s; /* Add smooth transition */
+    }
+
+    .link.active,
+    .link.clicked {
+      stroke: #f00; /* Change the color to red on hover/click */
+      stroke-width: 5px; /* Increase the stroke width on hover/click */
+    }
+
+    .link.green {
+      stroke: #0f0; /* Change the color to green for the longest path */
+      stroke-width: 5px; /* Increase the stroke width for the longest path */
+    }
+
+    .node.active,
+    .node.green {
+      fill: #f00; /* Change the color to red when connected to hovered link or in the longest path */
+    }
+
+    .node-label {
+      font-size: 12px;
+      text-anchor: middle;
+    }
+  </style>
+</head>
+<body>
+
+<script>
+  // Provided data
+  var data = JSON.parse('{{ graph_data|safe }}');
+
+  // Create SVG container
+  const svgWidth = 1600;
+  const svgHeight = 1200;
+  const svg = d3.select("body").append("svg")
+    .attr("width", svgWidth)
+    .attr("height", svgHeight);
+
+  // Use provided nodes
+  const nodes = data.nodes.map(node => ({ id: node.id, name: node.id }));
+
+  // Use provided links
+  const links = data.links.map(link => ({ source: nodes.findIndex(node => node.id === link.source), target: nodes.findIndex(node => node.id === link.target) }));
+
+  // Calculate dynamic grid layout
+  const totalNodes = nodes.length;
+  const gridSize = Math.ceil(Math.sqrt(totalNodes));
+  const numCols = Math.ceil(totalNodes / gridSize); // Calculate the number of columns dynamically
+  const spacing = 50; // Adjust the spacing here
+
+  nodes.forEach((node, index) => {
+    const col = index % numCols;
+    const row = Math.floor(index / numCols);
+    node.x = spacing * 3 * index;
+    node.y = spacing + row * spacing * 1.5;
+  });
+
+  // Create nodes
+  const nodeSelection = svg.selectAll(".node")
+    .data(nodes)
+    .enter().append("circle")
+    .attr("class", "node")
+    .attr("cx", d => d.x)
+    .attr("cy", d => d.y)
+    .attr("r", 15); // Decreased the node radius
+
+  // Create links
+  const linkSelection = svg.selectAll(".link")
+    .data(links)
+    .enter().append("path")
+    .attr("class", "link")
+    .attr("d", d => {
+      const dx = nodes[d.target].x - nodes[d.source].x;
+      const dy = nodes[d.target].y - nodes[d.source].y;
+      const dr = Math.sqrt(dx * dx + dy * dy);
+
+      // Check if nodes are adjacent or diagonally adjacent
+      if (Math.abs(d.target - d.source) === 1 || Math.abs(d.target - d.source) === numCols) {
+        return `M ${nodes[d.source].x},${nodes[d.source].y} L ${nodes[d.target].x},${nodes[d.target].y}`;
+      } else {
+        return `M ${nodes[d.source].x},${nodes[d.source].y} A ${dr},${dr} 0 0,1 ${nodes[d.target].x},${nodes[d.target].y}`;
+      }
+    })
+    .on("click", function() {
+      d3.select(this).classed("clicked", !d3.select(this).classed("clicked"));
+    });
+
+  // Add labels to nodes
+  const labelSelection = svg.selectAll(".node-label")
+    .data(nodes)
+    .enter().append("text")
+    .attr("class", "node-label")
+    .text(d => d.name)
+    .attr("x", d => d.x)
+    .attr("y", d => d.y)
+    .attr("dy", 5)
+    .attr("text-anchor", "middle");
+
+  // Add hover effect to links and change the color of connected nodes
+  linkSelection
+    .on("mouseover", function(d) {
+      d3.select(this).classed("active", true);
+      nodeSelection
+        .filter((node, i) => i === d.source || i === d.target)
+        .classed("active", true);
+    })
+    .on("mouseout", function() {
+      if (!d3.select(this).classed("clicked")) {
+        d3.select(this).classed("active", false);
+        nodeSelection.classed("active", false);
+      }
+    });
+
+  // Highlight the longest path in green
+  const longestPath = findLongestPath(links);
+  reorderNodesForHierarchy(longestPath);
+  highlightLongestPath(longestPath);
+
+  function findLongestPath(links) {
+    const adjacencyList = createAdjacencyList(links);
+    let visited = new Set();
+    let longestPath = [];
+
+    // DFS to find the longest path starting from each unvisited node
+    nodes.forEach((node, i) => {
+      if (!visited.has(i)) {
+        const currentPath = dfs(i, adjacencyList, visited);
+        if (currentPath.length > longestPath.length) {
+          longestPath = currentPath;
+        }
+      }
+    });
+
+    return longestPath;
+  }
+
+  function dfs(node, adjacencyList, visited) {
+    visited.add(node);
+    let longestPath = [];
+
+    adjacencyList[node].forEach(neighbor => {
+      if (!visited.has(neighbor)) {
+        const currentPath = dfs(neighbor, adjacencyList, visited);
+        if (currentPath.length > longestPath.length) {
+          longestPath = currentPath;
+        }
+      }
+    });
+
+    return [node, ...longestPath];
+  }
+
+  function createAdjacencyList(links) {
+    const adjacencyList = new Array(nodes.length).fill(null).map(() => []);
+    links.forEach(link => {
+      adjacencyList[link.source].push(link.target);
+      adjacencyList[link.target].push(link.source); // Assuming an undirected graph
+    });
+    return adjacencyList;
+  }
+
+  function reorderNodesForHierarchy(longestPath) {
+    const middleIndex = Math.floor(longestPath.length / 2);
+    const middleNode = longestPath[middleIndex];
+
+    // Calculate distances from the middle node
+    nodes.forEach(node => {
+      const distance = Math.abs(longestPath.indexOf(node.id) - longestPath.indexOf(middleNode));
+      node.distance = distance;
+    });
+
+    // Sort nodes by distance
+    nodes.sort((a, b) => a.distance - b.distance);
+
+    // Update node positions
+    nodes.forEach((node, index) => {
+      node.x = spacing * 3 * index;
+      node.y = svgHeight / 2;
+    });
+
+    // Update node positions in the visualization with animation
+    nodeSelection
+      .data(nodes)
+      .transition()
+      .duration(500)
+      .attr("cx", d => d.x)
+      .attr("cy", d => d.y);
+
+    // Update label positions with animation
+    labelSelection
+      .data(nodes)
+      .transition()
+      .duration(500)
+      .attr("x", d => d.x)
+      .attr("y", d => d.y);
+
+    // Update link positions with animation
+    linkSelection
+      .data(links)
+      .transition()
+      .duration(500)
+      .attr("d", d => {
+        const dx = nodes[d.target].x - nodes[d.source].x;
+        const dy = nodes[d.target].y - nodes[d.source].y;
+        const dr = Math.sqrt(dx * dx + dy * dy);
+
+        // Check if nodes are adjacent or diagonally adjacent
+        if (Math.abs(d.target - d.source) === 1 || Math.abs(d.target - d.source) === numCols) {
+          return `M ${nodes[d.source].x},${nodes[d.source].y} L ${nodes[d.target].x},${nodes[d.target].y}`;
+        } else {
+          return `M ${nodes[d.source].x},${nodes[d.source].y} A ${dr},${dr} 0 0,1 ${nodes[d.target].x},${nodes[d.target].y}`;
+        }
+      });
+  }
+
+  function highlightLongestPath(longestPath) {
+    linkSelection.classed("green", false); // Reset previous highlighting
+    svg.selectAll(".node").classed("green", false);
+
+    for (let i = 0; i < longestPath.length - 1; i++) {
+      const source = longestPath[i];
+      const target = longestPath[i + 1];
+
+      linkSelection
+        .filter(d => (d.source === source && d.target === target) || (d.source === target && d.target === source))
+        .classed("green", true);
+
+      nodeSelection
+        .filter((node, i) => i === source || i === target)
+        .classed("green", true);
+    }
+  }
+</script>
+
+</body>
+</html>

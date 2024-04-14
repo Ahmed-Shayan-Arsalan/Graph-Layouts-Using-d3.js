@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chord Layout with Node Names</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+    .chord path {
+      fill-opacity: 0.67;
+      stroke: #000;
+      stroke-width: 0.5px;
+    }
+    .node-label {
+      font-size: 12px;
+      text-anchor: middle;
+    }
+  </style>
+</head>
+<body>
+  <svg width="600" height="600"></svg>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    var data = JSON.parse('{{graph_data|safe}}');
+
+    const width = 600;
+    const height = 600;
+    const svg = d3.select('svg')
+                  .attr('width', width)
+                  .attr('height', height)
+                  .append('g')
+                  .attr('transform', `translate(${width / 2},${height / 2})`);
+
+    const matrix = [];
+    const nodes = data.nodes;
+    const links = data.links;
+
+    // Initialize matrix with zeros
+    for (let i = 0; i < nodes.length; i++) {
+      matrix[i] = [];
+      for (let j = 0; j < nodes.length; j++) {
+        matrix[i][j] = 0;
+      }
+    }
+
+    // Populate matrix with link counts
+    links.forEach(link => {
+      matrix[nodes.findIndex(node => node.id === link.source)]
+            [nodes.findIndex(node => node.id === link.target)] += 1;
+    });
+
+    const chord = d3.chord()
+                   .padAngle(0.05)
+                   .sortSubgroups(d3.descending)
+                   (matrix);
+
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+    const group = svg.append('g')
+                     .selectAll('g')
+                     .data(chord.groups)
+                     .enter().append('g');
+
+    group.append('path')
+         .attr('fill', d => color(d.index))
+         .attr('d', d3.arc()
+                     .innerRadius(200)
+                     .outerRadius(210))
+         .on('mouseover', fadeGroup(0.1))
+         .on('mouseout', fadeGroup(1));
+
+    const ribbons = svg.append('g')
+                       .selectAll('path')
+                       .data(chord)
+                       .enter().append('path')
+                       .attr('class', 'chord')
+                       .attr('d', d3.ribbon()
+                                   .radius(200))
+                       .style('fill', d => color(d.target.index))
+                       .style('opacity', 0.8)
+                       .on('mouseover', fadeRibbon(0.1))
+                       .on('mouseout', fadeRibbon(0.8));
+
+    const labelRadius = 220;
+
+    const labels = svg.append('g')
+                      .selectAll('text')
+                      .data(nodes)
+                      .enter().append('text')
+                      .attr('class', 'node-label')
+                      .attr('dy', '.35em')
+                      .attr('transform', (d, i) =>
+                        `rotate(${(360 / nodes.length) * i - 90}) translate(${labelRadius}) ${((360 / nodes.length) * i - 90 > 180) ? 'rotate(180)' : ''}`)
+                      .text(d => d.id);
+
+    function fadeGroup(opacity) {
+      return (d, i) => {
+        ribbons.filter(ribbon => ribbon.source.index !== i && ribbon.target.index !== i)
+               .transition()
+               .style('opacity', opacity);
+      };
+    }
+
+    function fadeRibbon(opacity) {
+      return (d) => {
+        ribbons.transition().style('opacity', 0.8); // Reset opacity for all ribbons
+
+        // Highlight the hovered ribbon and connected nodes
+        ribbons.filter(ribbon => ribbon === d || (ribbon.source.index === d.source.index && ribbon.target.index === d.target.index))
+               .transition()
+               .style('opacity', opacity);
+      };
+    }
+  </script>
+</body>
+</html>
